@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Frame — видео новостей и развлечений</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/">Fra<span>me</span></a>
+    <nav id="categories" class="categories" aria-label="Категории"></nav>
+    <button id="open-upload" class="btn">Загрузить видео</button>
+  </header>
+
+  <main>
+    <section id="player-section" class="player" hidden>
+      <video id="player" controls playsinline></video>
+      <div class="player-meta">
+        <h1 id="player-title"></h1>
+        <p id="player-info" class="muted"></p>
+        <p id="player-description"></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2 id="feed-title">Все видео</h2>
+        <span id="feed-count" class="muted"></span>
+      </div>
+      <div id="feed" class="grid"></div>
+      <p id="feed-empty" class="muted" hidden>Видео пока нет — загрузите первое.</p>
+    </section>
+  </main>
+
+  <dialog id="upload-dialog">
+    <form id="upload-form">
+      <h2>Новое видео</h2>
+      <label>Заголовок <input name="title" required maxlength="200"></label>
+      <label>Категория <select name="category" id="upload-category" required></select></label>
+      <label>Описание <textarea name="description" rows="3"></textarea></label>
+      <label>Файл <input name="file" type="file" accept="video/*" required></label>
+      <progress id="upload-progress" max="100" value="0" hidden></progress>
+      <p id="upload-status" class="muted"></p>
+      <div class="actions">
+        <button type="button" class="btn secondary" id="close-upload">Отмена</button>
+        <button type="submit" class="btn">Загрузить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="muted">Frame</footer>
+</body>
+</html>

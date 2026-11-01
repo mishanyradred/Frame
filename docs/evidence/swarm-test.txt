@@ -1,0 +1,29 @@
+==> Ожидание готовности API (http://localhost:8080)
+{"status":"ok","db":"ok","queue":"ok","files":"ok"}
+==> Проверка клиентской части
+
+==> Проверка справочника категорий
+
+==> Генерация тестового видео (5 с, 1280x720, звук 440 Гц)
+
+==> Загрузка видео через API
+id=57a43251-2e81-406e-9760-40165f4685d6
+
+==> Ожидание транскодирования (до 180 с)
+status=ready
+
+==> Проверка HLS-плейлиста и превью
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-STREAM-INF:BANDWIDTH=900895,AVERAGE-BANDWIDTH=900895,RESOLUTION=1280x720,CODECS="avc1.64001f,mp4a.40.2"
+720p.m3u8
+
+#EXT-X-STREAM-INF:BANDWIDTH=660255,AVERAGE-BANDWIDTH=660255,RESOLUTION=640x360,CODECS="avc1.64001e,mp4a.40.2"
+360p.m3u8
+
+==> Проверка запрета записи в хранилище извне
+
+==> Удаление тестового видео
+
+Все проверки пройдены
+Swarm Frame: http://localhost:8080

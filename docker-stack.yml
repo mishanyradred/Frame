@@ -1,0 +1,72 @@
+# Учебный Swarm на одном Docker Desktop. Сначала: scripts/swarm.sh
+version: "3.8"
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-frame}:${POSTGRES_PASSWORD:-frame}@db:5432/${POSTGRES_DB:-frame}
+  REDIS_URL: redis://queue:6379/0
+  DATA_DIR: /data
+
+x-placement: &placement
+  constraints: [node.role == manager]
+
+services:
+  proxy:
+    image: frame-proxy:local
+    ports: ["${HTTP_PORT:-8080}:80"]
+    volumes: ["files-data:/data:ro"]
+    networks: [app]
+    deploy:
+      placement: *placement
+      restart_policy: {condition: on-failure}
+
+  backend:
+    image: frame-backend:local
+    environment: *app-env
+    volumes: ["files-data:/data"]
+    networks: [app]
+    deploy:
+      replicas: 2
+      placement: *placement
+      restart_policy: {condition: on-failure}
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+
+  transcoder:
+    image: frame-transcoder:local
+    environment: *app-env
+    volumes: ["files-data:/data"]
+    networks: [app]
+    stop_grace_period: 2m
+    deploy:
+      placement: *placement
+      restart_policy: {condition: on-failure}
+
+  db:
+    image: frame-db:local
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-frame}
+      POSTGRES_USER: ${POSTGRES_USER:-frame}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frame}
+    volumes: ["db-data:/var/lib/postgresql/data"]
+    networks: [app]
+    deploy:
+      placement: *placement
+      restart_policy: {condition: on-failure}
+
+  queue:
+    image: frame-queue:local
+    volumes: ["queue-data:/data"]
+    networks: [app]
+    deploy:
+      placement: *placement
+      restart_policy: {condition: on-failure}
+
+networks:
+  app:
+    driver: overlay
+
+volumes:
+  files-data: {external: true, name: frame_files-data}
+  db-data: {external: true, name: frame_db-data}
+  queue-data: {external: true, name: frame_queue-data}

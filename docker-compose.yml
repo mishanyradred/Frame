@@ -1,0 +1,68 @@
+name: frame
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-frame}:${POSTGRES_PASSWORD:-frame}@db:5432/${POSTGRES_DB:-frame}
+  REDIS_URL: redis://queue:6379/0
+  DATA_DIR: /data
+
+services:
+  proxy:
+    build: .
+    image: frame-proxy:local
+    ports: ["127.0.0.1:${HTTP_PORT:-8080}:80"]
+    volumes: ["files-data:/data:ro"]
+    networks: [app]
+    depends_on:
+      backend: {condition: service_healthy}
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    image: frame-backend:local
+    environment: *app-env
+    volumes: ["files-data:/data"]
+    networks: [app]
+    depends_on:
+      db: {condition: service_healthy}
+      queue: {condition: service_healthy}
+    restart: unless-stopped
+
+  transcoder:
+    build: ./transcoder
+    image: frame-transcoder:local
+    environment: *app-env
+    volumes: ["files-data:/data"]
+    networks: [app]
+    depends_on:
+      backend: {condition: service_healthy}
+    stop_grace_period: 2m
+    restart: unless-stopped
+
+  db:
+    build: ./db
+    image: frame-db:local
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-frame}
+      POSTGRES_USER: ${POSTGRES_USER:-frame}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-frame}
+    volumes: ["db-data:/var/lib/postgresql/data"]
+    networks: [app]
+    restart: unless-stopped
+
+  queue:
+    build: ./queue
+    image: frame-queue:local
+    volumes: ["queue-data:/data"]
+    networks: [app]
+    restart: unless-stopped
+
+networks:
+  app:
+    name: frame_app
+
+volumes:
+  files-data:
+    external: true
+    name: frame_files-data
+  db-data:
+  queue-data:
