@@ -3,16 +3,18 @@
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
-import shutil
 import tempfile
 import threading
 import time
 from pathlib import Path
+from typing import cast
 
 import psycopg
 import redis
+from psycopg import sql
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://frame:frame@db:5432/frame")
 REDIS_URL = os.getenv("REDIS_URL", "redis://queue:6379/0")
@@ -39,10 +41,10 @@ def stop(*_):
 
 
 def update_video(video_id: str, **fields) -> None:
-    columns = ", ".join(f"{name} = %s" for name in fields)
+    columns = sql.SQL(", ").join(sql.SQL("{} = %s").format(sql.Identifier(name)) for name in fields)
     with psycopg.connect(DATABASE_URL) as conn:
         conn.execute(
-            f"UPDATE videos SET {columns}, updated_at = now() WHERE id = %s",
+            sql.SQL("UPDATE videos SET {}, updated_at = now() WHERE id = %s").format(columns),
             (*fields.values(), video_id),
         )
 
@@ -128,7 +130,7 @@ def main() -> None:
 
     while running:
         try:
-            item = queue.brpop(QUEUE_NAME, timeout=5)
+            item = cast(list[str] | None, queue.brpop([QUEUE_NAME], timeout=5))
         except redis.RedisError as exc:
             log.warning("очередь недоступна: %s", exc)
             time.sleep(2)

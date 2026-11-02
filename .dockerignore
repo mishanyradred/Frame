@@ -1,5 +1,8 @@
 .git
 .env
+.venv
+.zed
+.ruff_cache
 backups
 **/__pycache__
 *.pyc

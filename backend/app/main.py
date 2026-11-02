@@ -9,13 +9,13 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Annotated
 
 import psycopg
 import redis
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Query
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://frame:frame@db:5432/frame")
 REDIS_URL = os.getenv("REDIS_URL", "redis://queue:6379/0")
@@ -29,8 +29,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 queue = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
-def db():
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+def db() -> psycopg.Connection[DictRow]:
+    return psycopg.Connection[DictRow].connect(DATABASE_URL, row_factory=dict_row)
 
 
 def wait_for_dependencies(attempts: int = 30, delay: float = 2.0) -> None:
@@ -103,7 +103,11 @@ def list_categories():
 
 
 @app.get("/api/videos")
-def list_videos(category: Optional[str] = None, status: Optional[str] = None, limit: int = Query(50, ge=1, le=200)):
+def list_videos(
+    category: str | None = None,
+    status: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+):
     query, params = VIDEO_SELECT + " WHERE TRUE", []
     if category:
         query += " AND c.slug = %s"
@@ -128,10 +132,10 @@ def get_video(video_id: uuid.UUID):
 
 @app.post("/api/videos", status_code=201)
 def upload_video(
-    title: str = Form(..., min_length=1, max_length=200),
-    category: str = Form(...),
-    description: str = Form(""),
-    file: UploadFile = File(...),
+    title: Annotated[str, Form(min_length=1, max_length=200)],
+    category: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    description: Annotated[str, Form()] = "",
 ):
     if not (file.content_type or "").startswith("video/"):
         raise HTTPException(status_code=415, detail="ожидается видеофайл")
@@ -164,7 +168,12 @@ def upload_video(
 @app.delete("/api/videos/{video_id}", status_code=204)
 def delete_video(video_id: uuid.UUID):
     with db() as conn:
-        deleted = conn.execute("DELETE FROM videos WHERE id = %s RETURNING id", (video_id,)).fetchone()
+        deleted = conn.execute(
+            "DELETE FROM videos WHERE id = %s AND status IN ('ready', 'failed') RETURNING id",
+            (video_id,),
+        ).fetchone()
+        if not deleted and conn.execute("SELECT id FROM videos WHERE id = %s", (video_id,)).fetchone():
+            raise HTTPException(status_code=409, detail="Дождитесь завершения обработки видео")
     if not deleted:
         raise HTTPException(status_code=404, detail="видео не найдено")
     for folder in ("raw", "videos"):

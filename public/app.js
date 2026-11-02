@@ -6,7 +6,7 @@ const STATUS_LABELS = {
   failed: "ошибка",
 };
 
-const state = { category: null, categories: [], hls: null };
+const state = { category: null, categories: [], hls: null, playingId: null, feedTimer: null, feedRequest: 0 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -55,23 +55,76 @@ function videoCard(video) {
     <p class="muted">${video.category_name} · ${new Date(video.created_at).toLocaleString("ru-RU")}</p>
     <span class="badge">${STATUS_LABELS[video.status]}</span>`;
   card.querySelector("h3").textContent = video.title;
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "btn delete-video";
+  remove.textContent = "Удалить";
+  remove.setAttribute("aria-label", `Удалить видео «${video.title}»`);
+  remove.disabled = video.status === "uploaded" || video.status === "processing";
+  if (remove.disabled) remove.title = "Удаление доступно после завершения обработки";
+  remove.onclick = (event) => {
+    event.stopPropagation();
+    deleteVideo(video, remove);
+  };
+  actions.append(remove);
+  card.append(actions);
   if (video.status === "ready") card.onclick = () => play(video);
   return card;
 }
 
+async function deleteVideo(video, button) {
+  if (!window.confirm(`Удалить видео «${video.title}»? Исходник и обработанные файлы будут удалены.`)) return;
+  button.disabled = true;
+  button.textContent = "Удаление…";
+  try {
+    const response = await fetch(`/api/videos/${video.id}`, { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.detail || `Ошибка ${response.status}`);
+    }
+    if (state.playingId === video.id) {
+      const player = $("player");
+      player.pause();
+      if (state.hls) state.hls.destroy();
+      state.hls = null;
+      state.playingId = null;
+      player.removeAttribute("src");
+      player.load();
+      $("player-section").hidden = true;
+    }
+  } catch (err) {
+    window.alert(`Не удалось удалить видео: ${err.message}`);
+    button.disabled = false;
+    button.textContent = "Удалить";
+    return;
+  }
+  button.closest(".card").remove();
+  try {
+    await loadFeed();
+  } catch {
+    window.alert("Видео удалено. Обновите страницу, чтобы обновить список.");
+  }
+}
+
 async function loadFeed() {
+  clearTimeout(state.feedTimer);
+  const request = ++state.feedRequest;
   const query = state.category ? `?category=${state.category}` : "";
   const videos = await api(`/videos${query}`);
+  if (request !== state.feedRequest) return;
   $("feed").replaceChildren(...videos.map(videoCard));
   $("feed-empty").hidden = videos.length > 0;
   $("feed-count").textContent = videos.length ? `${videos.length} шт.` : "";
   // Пока есть необработанные ролики — обновляем ленту, чтобы показать смену статуса
   if (videos.some((v) => v.status === "uploaded" || v.status === "processing")) {
-    setTimeout(loadFeed, 3000);
+    state.feedTimer = setTimeout(loadFeed, 3000);
   }
 }
 
 function play(video) {
+  state.playingId = video.id;
   const player = $("player");
   $("player-section").hidden = false;
   $("player-title").textContent = video.title;
